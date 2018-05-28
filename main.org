@@ -1,0 +1,414 @@
+#+SETUPFILE: /home/cayek/src/org-html-themes/setup/theme-readtheorg.setup
+#+PROPERTY: header-args:R  :session *R-loadforecast* :exports results :eval no-export
+
+The February 2017 an energy consumption foretasting challenge was launched on
+the website driven data ([[https://www.drivendata.org/competitions/51/electricity-prediction-machine-learning/][Power Laws: Forecasting Energy Consumption]]). We use the
+energy consumption data provided for this challenge to build a forecast
+algorithm based on boosted trees and auto regressive model.
+
+* Download the data
+We use data provided by Schneider Electric for a forecasting challenge [[https://www.drivendata.org/competitions/51/electricity-prediction-machine-learning/][here]].
+* Prepare the data
+
+The challenge provide consumption and outside temperature for several building. 
+
+#+NAME: code_init
+#+CAPTION: load the data
+#+begin_src R :session *R-loadforecast*
+library(tidyverse)
+library(glue)
+library(lubridate)
+library(plotly)
+library(zoo)
+
+## load the data
+data_df <- data.table::fread("./data/challenge1/train.csv") %>%
+  as_tibble() %>%
+  mutate(Timestamp = ymd_hms(Timestamp))
+weather_df <- data.table::fread("./data/challenge1/weather.csv") %>%
+  as_tibble() %>%
+  mutate(Timestamp = ymd_hms(Timestamp))
+meta_df <- data.table::fread("./data/challenge1/metadata.csv") %>%
+  as_tibble()
+#+end_src
+
+#+NAME: code_prepare
+#+CAPTION: Prepare the data. This code chunk depends on chunk [[code_init]] 
+#+BEGIN_SRC R :session *R-loadforecast*
+## keep only one site
+s <- 8
+site_data_df <- data_df %>%
+  filter(SiteId == s)
+site_data_df
+
+## plot
+pl <- ggplot(site_data_df, aes(x = Timestamp, y = Value)) +
+  geom_line()
+## pl
+
+
+
+## join with weather
+w_df <- weather_df %>%
+  filter(SiteId == s) %>%
+  group_by(Timestamp) %>%
+  summarise(Temperature = median(Temperature))
+site_data_df <- site_data_df %>%
+  left_join(w_df, by = "Timestamp")
+
+## remove useless column
+site_data_df <- site_data_df %>%
+  transmute(Timestamp, ForecastId, Load = Value, Temperature)
+
+## approx
+site_data_df <- site_data_df %>%
+  mutate(Temperature = na.approx(Temperature, na.rm = FALSE, maxgap = 8))
+
+## create a target at + 24 hours
+target_lead <- 24 * 4
+site_data_df <- site_data_df %>%
+  group_by(ForecastId) %>%
+  mutate(target = lead(Load, target_lead)) %>%
+  mutate(Temperature = lead(Temperature, target_lead)) %>% ## lead the temperature (we assume that it is a forecast)
+  ungroup()
+
+
+
+## add days and hours
+site_data_df <- site_data_df %>%
+  mutate(weekday = weekdays(Timestamp) %>% as.factor(),
+         hour = hour(floor_date(Timestamp, 'hour')) %>% as.factor())
+
+## remove missing value
+cond <- (site_data_df %>% is.na() %>% rowSums()) == 0
+site_data_df <- site_data_df[cond,]
+
+## plots
+pl_df <- site_data_df %>% filter(ForecastId == 193) %>%
+  gather(key, value, Temperature, target, Load)
+pl <- ggplot(pl_df , aes(x = Timestamp, y = value, color = key)) +
+  geom_line() +
+  facet_grid(key~., scales = "free")
+pl
+
+## train and test
+train_df <- site_data_df %>%
+  filter(year(Timestamp)<2016)
+test_df <- site_data_df %>%
+  filter(year(Timestamp)>=2016)
+## dumps
+saveRDS(train_df, "./cache/kazlab-poc-dumps/R/train_df.rds")
+saveRDS(test_df, "./cache/kazlab-poc-dumps/R/test_df.rds")
+
+## dumps into csv
+write_csv(train_df, "./cache/kazlab-poc-dumps/R/train_df.csv")
+write_csv(test_df, "./cache/kazlab-poc-dumps/R/test_df.csv")
+
+## convert into Dmatrix
+features.names <- c("Temperature", "Load", "weekday", "hour")
+target.name <- c("target")
+xgboost_dmatrix <- function(.data, features.names, target.name) {
+  features.df <- .data %>%
+    dplyr::select(features.names)
+  dtrain <- xgboost::xgb.DMatrix(data = Matrix::sparse.model.matrix(~.-1, data = features.df),
+                                 label = .data[[target.name]])
+}
+dtrain <- xgboost_dmatrix(train_df, features.names, target.name)
+dtest <- xgboost_dmatrix(test_df, features.names, target.name)
+
+## dump
+xgb.DMatrix.save(dtrain, "./cache/kazlab-poc-dumps/R/train.txt")
+xgb.DMatrix.save(dtest, "./cache/kazlab-poc-dumps/R/test.txt")
+
+
+#+END_SRC
+
+#+NAME: code_train_plot
+#+CAPTION: Make ploltly to vizualize. This code chunk depends on chunk [[code_prepare]] 
+#+begin_src R :session *R-loadforecast* 
+## get the data
+train_df <- readRDS('./cache/kazlab-poc-dumps/R/train_df.rds')
+
+## plotly
+pl_df <- train_df %>%
+  filter(ForecastId %in% 200:205)
+p1 <- plot_ly(pl_df,
+              x = ~Timestamp,
+              y = ~Load, type = 'scatter', mode = 'lines',
+              name = "Consumption")
+p2 <- plot_ly(pl_df,
+              x = ~Timestamp,
+              y = ~Temperature, type = 'scatter', mode = 'lines',
+              name = "Temperature")
+p <- subplot(p1, p2, shareX = TRUE, nrows = 2)
+dump_plot(p, "/home/cayek/cache/kazlab-poc-dumps/plots/train_df.html", FALSE)
+#+end_src
+
+
+The following graph represent the times series for the consumption and
+temperature for the site 8. 
+#+BEGIN_EXPORT html
+<iframe src="./plots/train_df.html"
+        height="600" width="100%"
+        scrolling="no" seamless="seamless"
+        frameBorder="0">
+</iframe>
+#+END_EXPORT
+
+** Experiments                                                    :noexport:
+*** Export for loic scripts
+Export for loic zeppelin notbook
+#+BEGIN_SRC R :session *R-loadforecast*
+library(tidyverse)
+library(glue)
+library(lubridate)
+
+train_df <- readRDS('./cache/kazlab-poc-dumps/R/train_df.rds')
+test_df <- readRDS('./cache/kazlab-poc-dumps/R/test_df.rds')
+
+## format columns
+train_df <- train_df %>%
+  transmute(timestamp = Timestamp,
+            period_id = ForecastId,
+            actual_consumption = Load,
+            temperature = Temperature)
+test_df <- test_df %>%
+  transmute(timestamp = Timestamp,
+            period_id = ForecastId,
+            actual_consumption = Load,
+            temperature = Temperature)
+
+## dump
+write_csv(train_df, "./cache/kazlab-poc-dumps/R/loic_formated_train_df.csv")
+write_csv(test_df, "./cache/kazlab-poc-dumps/R/loic_formated_test_df.csv")
+#+END_SRC
+*** Site 8: all the consumption
+
+Export all the consumption of the site 8. 
+#+BEGIN_SRC R :session *R-loadforecast*
+library(tidyverse)
+library(glue)
+library(lubridate)
+s <- 8
+
+## get data
+site8_df <- data.table::fread("./data/challenge1/8.csv") %>%
+  as_tibble() %>%
+  mutate(Timestamp = ymd_hms(Timestamp))
+
+## plot
+pl <- ggplot(site8_df, aes(x = Timestamp, y = Value)) +
+  geom_line()
+
+## join with weather
+w_df <- weather_df %>%
+  filter(SiteId == s) %>%
+  group_by(Timestamp) %>%
+  summarise(Temperature = median(Temperature))
+site8_df <- site8_df %>%
+  left_join(w_df, by = "Timestamp")
+
+## approx
+site8_df <- site8_df %>%
+  mutate(Temperature = na.approx(Temperature, na.rm = FALSE, maxgap = 8))
+
+## remove useless column
+site8_df <- site8_df %>%
+  transmute(timestamp = Timestamp,
+            actual_consumption = Value,
+            temperature = Temperature)
+
+## plot
+pl <- ggplot(site8_df, aes(x = timestamp, y = temperature)) +
+  geom_line()
+
+## dump
+write_csv(site8_df, "./cache/kazlab-poc-dumps/R/site_8.csv")
+#+END_SRC
+* Model1: xgboost
+
+We firstly we build a model without tuning the parameters.
+
+#+NAME: code_xgb
+#+CAPTION: This code chunk depends on chunk [[code_prepare]] 
+#+BEGIN_SRC R :session *R-loadforecast*
+library(tidyverse)
+library(glue)
+library(lubridate)
+library(plotly)
+library(zoo)
+library(xgboost)
+
+## retrieve data frame 
+train_df <- readRDS('./cache/kazlab-poc-dumps/R/train_df.rds')
+test_df <- readRDS('./cache/kazlab-poc-dumps/R/test_df.rds')
+
+## retrieve the dmatrix
+dtest <- xgb.DMatrix("./cache/kazlab-poc-dumps/R/test.txt")
+dtrain <- xgb.DMatrix("./cache/kazlab-poc-dumps/R/train.txt")
+
+## xgboost
+## list of vector to test fold's indices
+## reduce the number of folds
+nfolds = 10
+train_df <- train_df %>%
+  mutate(ForecastId = ForecastId %% nfolds)
+folds <- sapply(unique(train_df$ForecastId),
+                function(id){which(train_df$ForecastId == id)}, simplify = FALSE)
+
+## cross validation for the number of trees
+params <- list(
+  booster = "gbtree", ## descision tree
+  eta = 0.1, ## learning rate
+  nthread = 8, ## number of thread
+  max_depth = 6, ## max depth of tree
+  subsample = 0.8, ## subsample rows
+  colsample_bytree = 1.0, ## 1 means features are not sampled
+  objective = "reg:linear") ## regression
+early_stopping_rounds <- 30 ## stop is the error do not decrease after 30 iterations
+nrounds <- 800 ## number max of tree
+verbose <- 1 ## plot errors
+
+## cross validation with xgboost
+bst.cv <- xgboost::xgb.cv(params = params,
+                          data = dtrain,
+                          early_stopping_rounds = early_stopping_rounds,
+                          nrounds = nrounds,
+                          metrics = "rmse",
+                          nfold = nfold,
+                          folds = folds,
+                          verbose = verbose)
+best_ntreelimit <- bst.cv$best_ntreelimit
+#+END_SRC
+
+#+NAME: code_fit_xgb
+#+CAPTION: This code chunk depends on chunk [[code_prepare]] 
+#+begin_src R :session *R-loadforecast*
+## train the model
+bst <- xgboost::xgb.train(params = params,
+                          data = dtrain,
+                          nrounds = best_ntreelimit,
+                          verbose = verbose,
+                          watchlist = list(test = dtest))
+
+test_df <- test_df %>%
+  mutate(predicted_Load = predict(bst, dtest))
+
+train_df <- train_df %>%
+  mutate(predicted_Load = predict(bst, dtrain))
+
+## plot
+p <- plot_ly(test_df, x = ~Timestamp,
+             y = ~target, type = 'scatter', mode = 'lines',
+             name = "consumption") %>%
+  add_trace(y = ~predicted_Load, mode = "lines",
+            name = "predicted consumption")
+dump_plot(p, "/home/cayek/cache/kazlab-poc-dumps/plots/xgb1.html", FALSE)
+
+
+## plot the train
+p <- plot_ly(train_df, x = ~Timestamp,
+             y = ~target, type = 'scatter', mode = 'lines',
+             name = "consumption") %>%
+  add_trace(y = ~predicted_Load, mode = "lines",
+            name = "predicted consumption")
+dump_plot(p, "/home/cayek/cache/kazlab-poc-dumps/plots/xgb1_train.html", FALSE)
+
+## dumps
+saveRDS(train_df, "./cache/kazlab-poc-dumps/R/train_df_xgb.rds")
+saveRDS(test_df, "./cache/kazlab-poc-dumps/R/test_df_xgb.rds")
+#+end_src
+
+This first model get an average prediction error of 3877 kW, which represent
+around 10 percent of the average consumption.
+
+#+NAME: code_xgb_err
+#+CAPTION: This code chunk depends on chunk [[code_fit_xgb]] 
+#+BEGIN_SRC R  :results output raw
+library(Metrics)
+library(ascii)
+
+test_df <- readRDS("./cache/kazlab-poc-dumps/R/test_df_xgb.rds")
+
+## compute error
+aux_df <- test_df %>% summarise(`root mean average error` = rmse(target, predicted_Load),
+                                `mean absolute error` = mae(target, predicted_Load),
+                                `mean consumption` = mean(target),
+                                `median consumption` = median(target))
+## print
+ascii(aux_df) %>%  print(type="org")
+#+END_SRC
+
+#+RESULTS: code_xgb_err
+|   | root mean average error | mean absolute error | mean consumption | median consumption |
+|---+-------------------------+---------------------+------------------+--------------------|
+| 1 | 5820.37                 | 3877.06             | 33487.80         | 27928.97           |
+
+The following graph show the forecast and actual consumption.
+#+BEGIN_EXPORT html
+<iframe src="./plots/xgb1.html"
+        height="600" width="100%"
+        scrolling="no" seamless="seamless"
+        frameBorder="0">
+</iframe>
+#+END_EXPORT
+
+* INPROGRESS Model2: xgboost + arima 
+#+NAME: code_arima_explor
+#+CAPTION: This code chunk depends on chunk [[code_fit_xgb]]
+#+begin_src R :session *R-loadforecast*
+library(tidyverse)
+library(glue)
+library(lubridate)
+library(plotly)
+library(zoo)
+library(xgboost)
+library(forecast)
+library(tseries)
+
+## retrieve data frame 
+train_df <- readRDS( "./cache/kazlab-poc-dumps/R/train_df_xgb.rds")
+test_df <- readRDS( "./cache/kazlab-poc-dumps/R/test_df_xgb.rds")
+
+## compute error
+train_df <- train_df %>%
+  mutate(error = target - predicted_Load)
+test_df <- test_df %>%
+  mutate(error = target - predicted_Load)
+
+## plots
+p <- plot_ly(train_df, x = ~Timestamp,
+             y = ~error, type = 'scatter', mode = 'lines',
+             name = "error")
+dump_plot(p, "/home/cayek/cache/kazlab-poc-dumps/plots/train_error.html", FALSE)
+#+end_src
+
+We plot the seasonality 
+
+#+BEGIN_SRC R :session *R-loadforecast*
+## sub sample of the time series
+dd <- train_df %>%
+  filter(Timestamp < ymd('20130401'))
+
+
+## plot the seasonality
+err_ts = ts(dd$error, frequency=24*4)
+decomp = stl(err_ts, s.window="periodic")
+deseasonal_cnt <- seasadj(decomp)
+plot(decomp)
+
+## test for
+adf.test(err_ts, alternative = "stationary")
+#+END_SRC
+
+Let's say that the time series is stationary.
+
+#+NAME: code_autocor
+#+CAPTION: This code chunk depends on chunk [[code_arima_explor]] 
+#+begin_src R :session *R-loadforecast*
+Acf(err_ts, main='')
+
+Pacf(err_ts, main='')
+#+end_src
+
+* Compare Model
