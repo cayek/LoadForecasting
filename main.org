@@ -1,4 +1,4 @@
-#+SETUPFILE: /home/cayek/src/org-html-themes/setup/theme-readtheorg.setup
+#+SETUPFILE: /home/cayek/.src/org-html-themes/setup/theme-readtheorg.setup
 #+PROPERTY: header-args:R  :session *R-loadforecast* :exports results :eval no-export
 
 The February 2017 an energy consumption foretasting challenge was launched on

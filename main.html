@@ -3,12 +3,12 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2018-05-28 lun. 14:20 -->
+<!-- 2019-02-04 Mon 10:15 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>&lrm;</title>
 <meta name="generator" content="Org mode" />
-<meta name="author" content="cayek" />
+<meta name="author" content="WTFRR04881L" />
 <style type="text/css">
  <!--/*--><![CDATA[/*><!--*/
   .title  { text-align: center;
@@ -161,6 +161,19 @@
   .footdef  { margin-bottom: 1em; }
   .figure { padding: 1em; }
   .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
   .inlinetask {
     padding: 10px;
     border: 2px solid gray;
@@ -180,18 +193,18 @@
   .org-svg { width: 90%; }
   /*]]>*/-->
 </style>
-<link rel="stylesheet" type="text/css" href="https://www.pirilampo.org/styles/readtheorg/css/htmlize.css"/>
-<link rel="stylesheet" type="text/css" href="https://www.pirilampo.org/styles/readtheorg/css/readtheorg.css"/>
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/styles/readtheorg/css/htmlize.css"/>
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/styles/readtheorg/css/readtheorg.css"/>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
-<script type="text/javascript" src="https://www.pirilampo.org/styles/lib/js/jquery.stickytableheaders.min.js"></script>
-<script type="text/javascript" src="https://www.pirilampo.org/styles/readtheorg/js/readtheorg.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/styles/lib/js/jquery.stickytableheaders.min.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/styles/readtheorg/js/readtheorg.js"></script>
 <script type="text/javascript">
 /*
 @licstart  The following is the entire license notice for the
 JavaScript code in this tag.
 
-Copyright (C) 2012-2018 Free Software Foundation, Inc.
+Copyright (C) 2012-2019 Free Software Foundation, Inc.
 
 The JavaScript code in this tag is free software: you can
 redistribute it and/or modify it under the terms of the GNU
@@ -239,11 +252,11 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org966af47">1. Download the data</a></li>
-<li><a href="#org4b93629">2. Prepare the data</a></li>
-<li><a href="#orgb36e1a9">3. Model1: xgboost</a></li>
-<li><a href="#org15ab024">4. <span class="todo INPROGRESS">INPROGRESS</span> Model2: xgboost + arima</a></li>
-<li><a href="#org5b1b556">5. Compare Model</a></li>
+<li><a href="#org93c9d4c">1. Download the data</a></li>
+<li><a href="#orgb92c873">2. Prepare the data</a></li>
+<li><a href="#org1da7b11">3. Model1: xgboost</a></li>
+<li><a href="#org31da6a1">4. <span class="todo INPROGRESS">INPROGRESS</span> Model2: xgboost + arima</a></li>
+<li><a href="#orgc055dde">5. Compare Model</a></li>
 </ul>
 </div>
 </div>
@@ -254,16 +267,16 @@ energy consumption data provided for this challenge to build a forecast
 algorithm based on boosted trees and auto regressive model.
 </p>
 
-<div id="outline-container-org966af47" class="outline-2">
-<h2 id="org966af47"><span class="section-number-2">1</span> Download the data</h2>
+<div id="outline-container-org93c9d4c" class="outline-2">
+<h2 id="org93c9d4c"><span class="section-number-2">1</span> Download the data</h2>
 <div class="outline-text-2" id="text-1">
 <p>
 We use data provided by Schneider Electric for a forecasting challenge <a href="https://www.drivendata.org/competitions/51/electricity-prediction-machine-learning/">here</a>.
 </p>
 </div>
 </div>
-<div id="outline-container-org4b93629" class="outline-2">
-<h2 id="org4b93629"><span class="section-number-2">2</span> Prepare the data</h2>
+<div id="outline-container-orgb92c873" class="outline-2">
+<h2 id="orgb92c873"><span class="section-number-2">2</span> Prepare the data</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 The challenge provide consumption and outside temperature for several building. 
@@ -280,8 +293,8 @@ temperature for the site 8.
 </iframe>
 </div>
 </div>
-<div id="outline-container-orgb36e1a9" class="outline-2">
-<h2 id="orgb36e1a9"><span class="section-number-2">3</span> Model1: xgboost</h2>
+<div id="outline-container-org1da7b11" class="outline-2">
+<h2 id="org1da7b11"><span class="section-number-2">3</span> Model1: xgboost</h2>
 <div class="outline-text-2" id="text-3">
 <p>
 We firstly we build a model without tuning the parameters.
@@ -337,8 +350,8 @@ The following graph show the forecast and actual consumption.
 </div>
 </div>
 
-<div id="outline-container-org15ab024" class="outline-2">
-<h2 id="org15ab024"><span class="section-number-2">4</span> <span class="todo INPROGRESS">INPROGRESS</span> Model2: xgboost + arima</h2>
+<div id="outline-container-org31da6a1" class="outline-2">
+<h2 id="org31da6a1"><span class="section-number-2">4</span> <span class="todo INPROGRESS">INPROGRESS</span> Model2: xgboost + arima</h2>
 <div class="outline-text-2" id="text-4">
 <p>
 We plot the seasonality 
@@ -350,13 +363,13 @@ Let's say that the time series is stationary.
 </div>
 </div>
 
-<div id="outline-container-org5b1b556" class="outline-2">
-<h2 id="org5b1b556"><span class="section-number-2">5</span> Compare Model</h2>
+<div id="outline-container-orgc055dde" class="outline-2">
+<h2 id="orgc055dde"><span class="section-number-2">5</span> Compare Model</h2>
 </div>
 </div>
 <div id="postamble" class="status">
-<p class="author">Author: cayek</p>
-<p class="date">Created: 2018-05-28 lun. 14:20</p>
+<p class="author">Author: WTFRR04881L</p>
+<p class="date">Created: 2019-02-04 Mon 10:15</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
